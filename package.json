@@ -18,7 +18,6 @@
     "global": "^4.4.0",
     "hardhat": "^2.8.4",
     "hardhat-deploy": "^0.9.3",
-    "hardhat-typechain": "^0.3.5",
     "ipfs-core": "^0.8.0",
     "ipfs-http-client": "^48.2.2",
     "ipns": "^0.12.0",
@@ -31,11 +30,14 @@
     "@nomiclabs/hardhat-ethers": "^2.0.2",
     "@nomiclabs/hardhat-etherscan": "^3.0.0",
     "@nomiclabs/hardhat-waffle": "^2.0.1",
+    "@typechain/ethers-v5": "^9.0.0",
+    "@typechain/hardhat": "^4.0.0",
     "@types/crypto-js": "^4.0.2",
     "ethereum-waffle": "^3.3.0",
     "ethers": "^5.4.1",
     "ts-node": "^9.1.1",
     "tsconfig-paths": "^3.9.0",
+    "typechain": "^7.0.0",
     "typescript": "^4.2.3"
   },
   "scripts": {

@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20Detailed.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
-import "./interfaces/IPriceSourceAll.sol";
+import "./IPriceSourceAll.sol";
 
 import "./MyVaultV4.sol";
 
