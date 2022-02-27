@@ -6,6 +6,7 @@ import { Address } from "ethereumjs-util";
 import { Contract } from "ethers";
 import { ethers } from "hardhat";
 import { CrosschainQiStablecoinSlim } from "../typechain-types";
+
 const toDecimal = (n: string) => ethers.utils.parseUnits(n);
 const fromDecimal = (n: string) => ethers.utils.formatUnits(n);
 
@@ -17,9 +18,16 @@ describe("CrossChainQiStablecoin", async function () {
     let wmatic: Contract
     let mai: Contract
     let admin: SignerWithAddress
-
     let signers: SignerWithAddress[]
+
+    const vaultName = "Wrapped Ethereum Arbitrum MAI Vault";
+    const vaultSymbol = "WEAMVT";
+    const priceSource = "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612";
+    const ipfsUri = "ipfs://QmViuQUnqWDL75PV3DNqLfM8GCvLouBrbVe2ShLcdqxRzR";
+    const initialCDR = 130;
+
     this.beforeEach(async function () {
+    
         signers = await ethers.getSigners();
         qiStablecoinFactory = await ethers.getContractFactory("crosschainQiStablecoinSlim");
         wmaticFactory = await ethers.getContractFactory("WMATIC")
@@ -30,13 +38,13 @@ describe("CrossChainQiStablecoin", async function () {
             toDecimal("1000000")
         );
         qiStablecoin = await qiStablecoinFactory.connect(signers[0]).deploy(
-            "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612", // Oracle (underlying pricesource)
-            130, // Minimum CDR
-            "Wrapped Ethereum Arbitrum MAI Vault", // Vault name
-            "WEAMVT", // Vault symbol
+            priceSource, // Oracle (underlying pricesource)
+            initialCDR, // Minimum CDR
+            vaultName, // Vault name
+            vaultSymbol, // Vault symbol
             mai.address,
             wmatic.address, // Eth vault (collateral)
-            "ipfs://QmViuQUnqWDL75PV3DNqLfM8GCvLouBrbVe2ShLcdqxRzR", // IPFS hash
+            ipfsUri, // IPFS hash
         ) as CrosschainQiStablecoinSlim;
 
         await wmatic.deployed()
@@ -44,17 +52,15 @@ describe("CrossChainQiStablecoin", async function () {
 
         admin = signers[0]
 
-        console.log('prefunding the vault so it has some mai');
-
     });
 
     it("Constructor checking parameters for the deployment", async () => {
         const name = await qiStablecoin.name()
-        expect(name).to.eq('Wrapped Ethereum Arbitrum MAI Vault')
-        expect(await qiStablecoin.symbol()).to.eq('WEAMVT')
-        expect(await qiStablecoin.uri()).to.eq('ipfs://QmViuQUnqWDL75PV3DNqLfM8GCvLouBrbVe2ShLcdqxRzR')
-        expect(await qiStablecoin._minimumCollateralPercentage()).to.eq(130)
-        expect(await qiStablecoin.ethPriceSource()).to.eq('0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612')
+        expect(name).to.eq(vaultName)
+        expect(await qiStablecoin.symbol()).to.eq(vaultSymbol)
+        expect(await qiStablecoin.uri()).to.eq(priceSource)
+        expect(await qiStablecoin._minimumCollateralPercentage()).to.eq(initialCDR)
+        expect(await qiStablecoin.ethPriceSource()).to.eq(priceSource)
         expect(await qiStablecoin.collateral()).to.eq(wmatic.address)
         expect(await qiStablecoin.mai()).to.eq(mai.address)
 
