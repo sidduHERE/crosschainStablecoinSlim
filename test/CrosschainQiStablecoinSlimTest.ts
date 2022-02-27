@@ -3,7 +3,7 @@ const { expect } = require("chai");
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { assert } from "chai";
 import { Address } from "ethereumjs-util";
-import { Contract } from "ethers";
+import { BigNumberish, Contract } from "ethers";
 import { ethers } from "hardhat";
 import { CrosschainQiStablecoinSlim } from "../typechain-types";
 
@@ -18,6 +18,9 @@ describe("CrossChainQiStablecoin", async function () {
     let wmatic: Contract
     let mai: Contract
     let admin: SignerWithAddress
+    let user1: SignerWithAddress
+    let user2: SignerWithAddress
+
     let signers: SignerWithAddress[]
 
     const vaultName = "Wrapped Ethereum Arbitrum MAI Vault";
@@ -51,6 +54,8 @@ describe("CrossChainQiStablecoin", async function () {
         await qiStablecoin.deployed()
 
         admin = signers[0]
+        user1 = signers[1]
+        user2 = signers[2]
 
     });
 
@@ -58,7 +63,7 @@ describe("CrossChainQiStablecoin", async function () {
         const name = await qiStablecoin.name()
         expect(name).to.eq(vaultName)
         expect(await qiStablecoin.symbol()).to.eq(vaultSymbol)
-        expect(await qiStablecoin.uri()).to.eq(priceSource)
+        expect(await qiStablecoin.uri()).to.eq(ipfsUri)
         expect(await qiStablecoin._minimumCollateralPercentage()).to.eq(initialCDR)
         expect(await qiStablecoin.ethPriceSource()).to.eq(priceSource)
         expect(await qiStablecoin.collateral()).to.eq(wmatic.address)
@@ -81,8 +86,8 @@ describe("CrossChainQiStablecoin", async function () {
         await qiStablecoin.connect(admin).setGainRatio(1102)
         expect(await qiStablecoin.gainRatio()).to.eq(1102)
         // changeEthPriceSource
-        await qiStablecoin.connect(admin).changeEthPriceSource(signers[1].address)
-        expect(await qiStablecoin.ethPriceSource()).to.eq(signers[1].address)
+        await qiStablecoin.connect(admin).changeEthPriceSource(user1.address)
+        expect(await qiStablecoin.ethPriceSource()).to.eq(user1.address)
         // setStabilityPool
         await qiStablecoin.connect(admin).setStabilityPool('0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612')
         expect(await qiStablecoin.stabilityPool()).to.eq('0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612')
@@ -99,11 +104,23 @@ describe("CrossChainQiStablecoin", async function () {
     })
 
     it("test createVault", async () => {
-
+        // create Vault emitting the vaultID
+        await expect(
+            qiStablecoin.connect(user1).createVault()
+          ).to.emit(qiStablecoin, "CreateVault").withArgs(0, user1.address);
+        // VaultNFT transferred to user1 after creation of Vault
+        expect( await qiStablecoin.balanceOf(user1.address)).to.eq(1)
+       
     })
 
     it("test destroyVault", async () => {
+        await qiStablecoin.connect(user1).createVault()
 
+        await expect(
+            qiStablecoin.connect(user1).destroyVault(0)
+          ).to.emit(qiStablecoin, "DestroyVault").withArgs(0);
+        // VaultNFT transferred to user1 after creation of Vault
+        expect( await qiStablecoin.balanceOf(user1.address)).to.eq(0)
     })
 
     it("test depositCollateral", async () => {
