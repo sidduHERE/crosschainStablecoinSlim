@@ -1,15 +1,16 @@
 require('dotenv').config()
 
 import { HardhatUserConfig } from "hardhat/types";
+import 'hardhat/config';
 import "@nomiclabs/hardhat-waffle";
-import "hardhat-typechain";
+import "@typechain/hardhat";
 import "tsconfig-paths/register";
 import "@nomiclabs/hardhat-web3";
 
 import "@nomiclabs/hardhat-etherscan";
 
 const config: HardhatUserConfig = {
-  defaultNetwork: "mainnet",
+  defaultNetwork: "hardhat",
   solidity: {
     compilers: [{
       version: "0.5.0", settings: {
@@ -159,9 +160,10 @@ const config: HardhatUserConfig = {
     },
     hardhat: {
       forking: {
-        url: `https://rpc.ftm.tools`,
+        // url: `https://rpc.ftm.tools`,
         // url: `https://rpc.ftm.tools`,
         // url: 'https://polygon-rpc.com'
+        url: 'https://arb1.arbitrum.io/rpc'
       },
     }
   },

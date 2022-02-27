@@ -1,6 +1,6 @@
 .DS_Store
 node_modules/**
-typechain/**
+typechain-types/**
 artifacts/**
 cache/**/**
 cache/solidity-files-cache.json
