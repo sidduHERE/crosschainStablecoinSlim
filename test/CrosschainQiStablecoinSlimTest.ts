@@ -3,8 +3,9 @@ const { expect } = require("chai");
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { assert } from "chai";
 import { Address } from "ethereumjs-util";
-import { BigNumberish, Contract } from "ethers";
+import { BigNumber, BigNumberish, Contract } from "ethers";
 import { ethers } from "hardhat";
+import { multiaddr } from "ipfs-core/src/";
 import { CrosschainQiStablecoinSlim } from "../typechain-types";
 
 const toDecimal = (n: string) => ethers.utils.parseUnits(n);
@@ -28,9 +29,10 @@ describe("CrossChainQiStablecoin", async function () {
     const priceSource = "0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612";
     const ipfsUri = "ipfs://QmViuQUnqWDL75PV3DNqLfM8GCvLouBrbVe2ShLcdqxRzR";
     const initialCDR = 130;
+    const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
     this.beforeEach(async function () {
-    
+
         signers = await ethers.getSigners();
         qiStablecoinFactory = await ethers.getContractFactory("crosschainQiStablecoinSlim");
         wmaticFactory = await ethers.getContractFactory("WMATIC")
@@ -71,7 +73,7 @@ describe("CrossChainQiStablecoin", async function () {
 
         // variables sets in the constructor
         expect(await qiStablecoin.closingFee()).to.eq(50)
-        expect(await qiStablecoin.stabilityPool()).to.eq('0x0000000000000000000000000000000000000000')
+        expect(await qiStablecoin.stabilityPool()).to.eq(ZERO_ADDRESS)
         expect(await qiStablecoin.tokenPeg()).to.eq(100000000)
         expect(await qiStablecoin.debtRatio()).to.eq(2)
         expect(await qiStablecoin.gainRatio()).to.eq(1100)
@@ -107,10 +109,10 @@ describe("CrossChainQiStablecoin", async function () {
         // create Vault emitting the vaultID
         await expect(
             qiStablecoin.connect(user1).createVault()
-          ).to.emit(qiStablecoin, "CreateVault").withArgs(0, user1.address);
+        ).to.emit(qiStablecoin, "CreateVault").withArgs(0, user1.address);
         // VaultNFT transferred to user1 after creation of Vault
-        expect( await qiStablecoin.balanceOf(user1.address)).to.eq(1)
-       
+        expect(await qiStablecoin.balanceOf(user1.address)).to.eq(1)
+
     })
 
     it("test destroyVault", async () => {
@@ -118,25 +120,138 @@ describe("CrossChainQiStablecoin", async function () {
 
         await expect(
             qiStablecoin.connect(user1).destroyVault(0)
-          ).to.emit(qiStablecoin, "DestroyVault").withArgs(0);
+        ).to.emit(qiStablecoin, "DestroyVault").withArgs(0);
         // VaultNFT transferred to user1 after creation of Vault
-        expect( await qiStablecoin.balanceOf(user1.address)).to.eq(0)
+        expect(await qiStablecoin.balanceOf(user1.address)).to.eq(0)
     })
 
-    it("test depositCollateral", async () => {
-
+    it("test checkCost,checkExtract: checkLiquidation -> false ", async () => {
+        // setup 
+        const ethPrice: BigNumber = await qiStablecoin.getEthPriceSource()
+        const maiPrice = await qiStablecoin.getTokenPriceSource()
+        // funding mai and wmatic to user and qiStableCoin as a pre-requisite
+        await wmatic.connect(admin).transfer(user1.address, ethers.utils.parseUnits("20"))
+        await mai.connect(admin).transfer(qiStablecoin.address, ethers.utils.parseUnits("100000"))
+        // auser1 approving collateral token for the vault deposit
+        await wmatic.connect(user1).approve(qiStablecoin.address, ethers.utils.parseUnits("200"))
+        // vault deposit
+        await qiStablecoin.connect(user1).createVault()
+        // collateral deposit
+        await qiStablecoin.connect(user1).depositCollateral(0, ethers.utils.parseUnits("10"))
+        expect(await qiStablecoin.vaultCollateral(0)).to.eq(ethers.utils.parseUnits("10"))
+        // mai borrow 
+        const borrowAmount: number = (10 * Number(ethPrice)) / (Number(maiPrice) * 1.4)
+        await qiStablecoin.connect(user1).borrowToken(0, ethers.utils.parseUnits(borrowAmount.toString()))
+        // Assertions
+        expect(await qiStablecoin.checkCost(0)).to.eq(0)
+        expect(await qiStablecoin.checkExtract(0)).to.eq(0)
+        expect(await qiStablecoin.checkLiquidation(0)).to.eq(false)
+        expect(await qiStablecoin.checkCollateralPercentage(0)).to.gte(139)
     })
 
-    it("test withdraw collateral", async () => {
-
+    it("test checkCost,checkExtract: checkLiquidation -> true ", async () => {
+        // setup 
+        const ethPrice: BigNumber = await qiStablecoin.getEthPriceSource()
+        const maiPrice = await qiStablecoin.getTokenPriceSource()
+        // funding mai and wmatic to user and qiStableCoin as a pre-requisite
+        await wmatic.connect(admin).transfer(user1.address, ethers.utils.parseUnits("20"))
+        await mai.connect(admin).transfer(qiStablecoin.address, ethers.utils.parseUnits("100000"))
+        // user1 approving collateral token for the vault deposit
+        await wmatic.connect(user1).approve(qiStablecoin.address, ethers.utils.parseUnits("200"))
+        // vault deposit
+        await qiStablecoin.connect(user1).createVault()
+        // collateral deposit
+        await qiStablecoin.connect(user1).depositCollateral(0, ethers.utils.parseUnits("10"))
+        expect(await qiStablecoin.vaultCollateral(0)).to.eq(ethers.utils.parseUnits("10"))
+        // mai borrow 
+        const borrowAmount: number = (10 * Number(ethPrice)) / (Number(maiPrice) * 1.4)
+        const tx = await qiStablecoin.connect(user1).borrowToken(0, ethers.utils.parseUnits(borrowAmount.toString()))
+        tx.wait()
+        // modifying _minCollateralPercentage to artificially liquidate an account
+        console.log("Collateral Percentage:", await qiStablecoin.checkCollateralPercentage(0))
+        await qiStablecoin.connect(admin).setMinCollateralRatio(150)
+        // Assertions
+        expect(await qiStablecoin.checkCost(0)).to.gt(0)
+        expect(await qiStablecoin.checkExtract(0)).to.gt(0)
+        expect(await qiStablecoin.checkLiquidation(0)).to.eq(true)
     })
 
-    it("test borrow", async () => {
+    it("test liquidateVault ", async () => {
+        // setup 
+        const ethPrice: BigNumber = await qiStablecoin.getEthPriceSource()
+        const maiPrice = await qiStablecoin.getTokenPriceSource()
+        // funding mai and wmatic to user and qiStableCoin as a pre-requisite
+        await wmatic.connect(admin).transfer(user1.address, ethers.utils.parseUnits("20"))
+        await mai.connect(admin).transfer(qiStablecoin.address, ethers.utils.parseUnits("100000"))
+        const approveTx = await mai.connect(user2).approve(qiStablecoin.address, ethers.utils.parseUnits("100000"))
+        approveTx.wait()
+        await mai.connect(admin).transfer(user2.address, ethers.utils.parseUnits("100000"))
+        // user1 approving collateral token for the vault deposit
+        await wmatic.connect(user1).approve(qiStablecoin.address, ethers.utils.parseUnits("200"))
+        // vault deposit
+        await qiStablecoin.connect(user1).createVault()
+        // collateral deposit
+        await qiStablecoin.connect(user1).depositCollateral(0, ethers.utils.parseUnits("10"))
+        expect(await qiStablecoin.vaultCollateral(0)).to.eq(ethers.utils.parseUnits("10"))
+        // mai borrow 
+        const borrowAmount: number = (10 * Number(ethPrice)) / (Number(maiPrice) * 1.4)
+        const tx = await qiStablecoin.connect(user1).borrowToken(0, ethers.utils.parseUnits(borrowAmount.toString()))
+        tx.wait()
+        // modifying _minCollateralPercentage to artificially liquidate an account
+        console.log("Collateral Percentage:", await qiStablecoin.checkCollateralPercentage(0))
+        await qiStablecoin.connect(admin).setMinCollateralRatio(150)
+        // liquidation by user2
 
+        const liquidationTx = await qiStablecoin.connect(user2).liquidateVault(0)
+        liquidationTx.wait()
+        // Assertions
+        const remAmountOnUser2Expected = ethers.utils.parseUnits("100000").sub(ethers.utils.parseUnits(borrowAmount.toString()))
+        expect(await mai.balanceOf(user2.address)).to.gte(remAmountOnUser2Expected)
+        // After liquidation, Collateral Percentage should increase
+        expect(await qiStablecoin.checkCollateralPercentage(0)).to.gte(150)
+        expect(await qiStablecoin.maticDebt(user2.address)).to.gt(0)
     })
 
-    it("test payback", async () => {
+    it("test getPaid ", async () => {
+        // before Liquidation:
+        await expect(
+            qiStablecoin.connect(user2).getPaid()
+        ).to.be.revertedWith("Don't have anything for you.")
+        // After Liquidation
+        // setup 
+        const ethPrice: BigNumber = await qiStablecoin.getEthPriceSource()
+        const maiPrice = await qiStablecoin.getTokenPriceSource()
+        // funding mai and wmatic to user and qiStableCoin as a pre-requisite
+        await wmatic.connect(admin).transfer(user1.address, ethers.utils.parseUnits("20"))
+        await mai.connect(admin).transfer(qiStablecoin.address, ethers.utils.parseUnits("100000"))
+        const approveTx = await mai.connect(user2).approve(qiStablecoin.address, ethers.utils.parseUnits("100000"))
+        approveTx.wait()
+        await mai.connect(admin).transfer(user2.address, ethers.utils.parseUnits("100000"))
+        // user1 approving collateral token for the vault deposit
+        await wmatic.connect(user1).approve(qiStablecoin.address, ethers.utils.parseUnits("200"))
+        // vault deposit
+        await qiStablecoin.connect(user1).createVault()
+        // collateral deposit
+        await qiStablecoin.connect(user1).depositCollateral(0, ethers.utils.parseUnits("10"))
+        expect(await qiStablecoin.vaultCollateral(0)).to.eq(ethers.utils.parseUnits("10"))
+        // mai borrow 
+        const borrowAmount: number = (10 * Number(ethPrice)) / (Number(maiPrice) * 1.4)
+        const tx = await qiStablecoin.connect(user1).borrowToken(0, ethers.utils.parseUnits(borrowAmount.toString()))
+        tx.wait()
+        // modifying _minCollateralPercentage to artificially liquidate an account
+        console.log("Collateral Percentage:", await qiStablecoin.checkCollateralPercentage(0))
+        await qiStablecoin.connect(admin).setMinCollateralRatio(150)
+        // liquidation by user2
 
+        const liquidationTx = await qiStablecoin.connect(user2).liquidateVault(0)
+        liquidationTx.wait()
+        const maticReward = await qiStablecoin.maticDebt(user2.address);
+        await qiStablecoin.connect(user2).getPaid()
+
+        // Assertions
+        expect(await wmatic.balanceOf(user2.address)).to.eq(maticReward)
+        // After liquidation, Collateral Percentage should increase
+        expect(await qiStablecoin.maticDebt(user2.address)).to.eq(0)
     })
 
 });
