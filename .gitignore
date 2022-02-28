@@ -5,3 +5,4 @@ artifacts/**
 cache/**/**
 cache/solidity-files-cache.json
 .env
+package-lock.json

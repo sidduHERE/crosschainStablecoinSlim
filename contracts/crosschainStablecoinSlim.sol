@@ -286,6 +286,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
 
         totalBorrowed = totalBorrowed.sub(amount);
         emit PayBackToken(vaultID, amount, _closingFee);
+
     }
 
     function getPaid() public nonReentrant {

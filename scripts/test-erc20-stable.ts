@@ -55,6 +55,7 @@ async function main() {
   console.log("account is: ", account);
   // 1. Pre-requisites
   console.log(`1a`)
+  w
   await wmatic.approve(qiStablecoin.address, "19000000000000000000")
   console.log(`1b`)
   await vault.setAdmin(qiStablecoin.address);

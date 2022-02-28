@@ -58,7 +58,7 @@ describe("CrossChainQiStablecoin", async function () {
         const name = await qiStablecoin.name()
         expect(name).to.eq(vaultName)
         expect(await qiStablecoin.symbol()).to.eq(vaultSymbol)
-        expect(await qiStablecoin.uri()).to.eq(priceSource)
+        expect(await qiStablecoin.uri()).to.eq(ipfsUri)
         expect(await qiStablecoin._minimumCollateralPercentage()).to.eq(initialCDR)
         expect(await qiStablecoin.ethPriceSource()).to.eq(priceSource)
         expect(await qiStablecoin.collateral()).to.eq(wmatic.address)
@@ -118,8 +118,5 @@ describe("CrossChainQiStablecoin", async function () {
 
     })
 
-    it("test payback", async () => {
-
-    })
 
 });
