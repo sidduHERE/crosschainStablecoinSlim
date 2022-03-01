@@ -135,14 +135,12 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
         uint256 collateralValue = _collateral.mul(getEthPriceSource()).mul(
             10**(uint256(mai.decimals()).sub(uint256(collateral.decimals())))
         );
-
-
+        
         assert(collateralValue >= _collateral);
 
         uint256 debtValue = _debt.mul(getTokenPriceSource());
 
         assert(debtValue >= _debt);
-        
 
         uint256 collateralValueTimes100 = collateralValue.mul(100);
         
