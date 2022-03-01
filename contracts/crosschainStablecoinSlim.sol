@@ -96,6 +96,13 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
         _;
     }
 
+    modifier vaultExists(uint256 vaultID) {
+        require(_exists(vaultID), "Vault does not exist");
+        _;
+    }
+
+
+
     function getDebtCeiling() public view returns (uint256) {
         return mai.balanceOf(address(this));
     }
@@ -129,21 +136,25 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
             10**(uint256(mai.decimals()).sub(uint256(collateral.decimals())))
         );
 
+        console.log(collateralValue);
+
         assert(collateralValue >= _collateral);
 
         uint256 debtValue = _debt.mul(getTokenPriceSource());
 
         assert(debtValue >= _debt);
+        
+        console.log(debtValue);
 
         uint256 collateralValueTimes100 = collateralValue.mul(100);
-
+        
         assert(collateralValueTimes100 > collateralValue);
 
         return (collateralValueTimes100, debtValue);
     }
 
     function isValidCollateral(uint256 collateral, uint256 debt)
-        private
+        public
         view
         returns (bool)
     {
@@ -190,7 +201,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
         emit DestroyVault(vaultID);
     }
 
-    function depositCollateral(uint256 vaultID, uint256 amount) external {
+    function depositCollateral(uint256 vaultID, uint256 amount) external vaultExists {
         collateral.safeTransferFrom(msg.sender, address(this), amount);
 
         uint256 newCollateral = vaultCollateral[vaultID].add(amount);
@@ -360,9 +371,9 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
     function checkCollateralPercentage(uint256 vaultID)
         public
         view
+        vaultExists
         returns (uint256)
     {
-        require(_exists(vaultID), "Vault does not exist");
 
         if (vaultCollateral[vaultID] == 0 || vaultDebt[vaultID] == 0) {
             return 0;
@@ -378,8 +389,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
         return collateralValueTimes100.div(debtValue);
     }
 
-    function checkLiquidation(uint256 vaultID) public view returns (bool) {
-        require(_exists(vaultID), "Vault does not exist");
+    function checkLiquidation(uint256 vaultID) public view vaultExists returns (bool) {
 
         if (vaultCollateral[vaultID] == 0 || vaultDebt[vaultID] == 0) {
             return false;
@@ -402,8 +412,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
         }
     }
 
-    function liquidateVault(uint256 vaultID) external {
-        require(_exists(vaultID), "Vault does not exist");
+    function liquidateVault(uint256 vaultID) external  vaultExists {
         require(
             stabilityPool == address(0) || msg.sender == stabilityPool,
             "liquidation is disabled for public"
