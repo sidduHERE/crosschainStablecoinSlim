@@ -201,7 +201,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
         emit DestroyVault(vaultID);
     }
 
-    function depositCollateral(uint256 vaultID, uint256 amount) external vaultExists {
+    function depositCollateral(uint256 vaultID, uint256 amount) external vaultExists(vaultID) {
         collateral.safeTransferFrom(msg.sender, address(this), amount);
 
         uint256 newCollateral = vaultCollateral[vaultID].add(amount);
@@ -371,7 +371,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
     function checkCollateralPercentage(uint256 vaultID)
         public
         view
-        vaultExists
+        vaultExists(vaultID)
         returns (uint256)
     {
 
@@ -389,7 +389,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
         return collateralValueTimes100.div(debtValue);
     }
 
-    function checkLiquidation(uint256 vaultID) public view vaultExists returns (bool) {
+    function checkLiquidation(uint256 vaultID) public view vaultExists(vaultID) returns (bool) {
 
         if (vaultCollateral[vaultID] == 0 || vaultDebt[vaultID] == 0) {
             return false;
@@ -412,7 +412,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
         }
     }
 
-    function liquidateVault(uint256 vaultID) external  vaultExists {
+    function liquidateVault(uint256 vaultID) external  vaultExists(vaultID) {
         require(
             stabilityPool == address(0) || msg.sender == stabilityPool,
             "liquidation is disabled for public"
