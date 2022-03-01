@@ -44,8 +44,8 @@ export const borrowToken = async (
   export const payback = async (
     qiStablecoin: Contract,
     depositor: SignerWithAddress,
-    vaultId: number,
-    paybackAmount: BigNumberish
+    paybackAmount: BigNumberish,
+    vaultId: number
   ) => {
     return  qiStablecoin
       .connect(depositor)

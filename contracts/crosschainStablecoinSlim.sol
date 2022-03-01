@@ -135,7 +135,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
         uint256 collateralValue = _collateral.mul(getEthPriceSource()).mul(
             10**(uint256(mai.decimals()).sub(uint256(collateral.decimals())))
         );
-
+        
         assert(collateralValue >= _collateral);
 
         uint256 debtValue = _debt.mul(getTokenPriceSource());
@@ -266,13 +266,14 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
         emit BorrowToken(vaultID, amount);
     }
 
-    function payBackToken(uint256 vaultID, uint256 amount) external {
+    function payBackToken(uint256 vaultID, uint256 amount) external vaultExists(vaultID) {
         require(mai.balanceOf(msg.sender) >= amount, "Token balance too low");
 
         require(
             vaultDebt[vaultID] >= amount,
             "Vault debt less than amount to pay back"
         );
+
         require(
             (vaultDebt[vaultID]).sub(amount) >= minDebt
                    ||
