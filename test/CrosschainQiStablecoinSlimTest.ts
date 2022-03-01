@@ -99,6 +99,50 @@ describe("CrossChainQiStablecoin", async function () {
         // setTokenURI
         await qiStablecoin.connect(admin).setTokenURI('test')
         expect(await qiStablecoin.uri()).to.eq('test')
+        //  setTreasury
+        await qiStablecoin.connect(admin).createVault()
+        await qiStablecoin.connect(admin).createVault()
+        await qiStablecoin.connect(admin).setTreasury(1)
+        expect(await qiStablecoin.treasury()).to.eq(1)
+
+    })
+
+    it("test CrosschainQiStablecoinSlim admin methods :  non-admin ", async () => {
+        // setDebtRatio
+        await expect(
+            qiStablecoin.connect(user1).setDebtRatio(3)
+        ).to.be.revertedWith("Ownable: caller is not the owner")
+        // setGainRatio
+        await expect(
+            qiStablecoin.connect(user1).setGainRatio(1102)
+        ).to.be.revertedWith("Ownable: caller is not the owner")
+        // changeEthPriceSource
+        await expect(
+            qiStablecoin.connect(user1).changeEthPriceSource(user1.address)
+        ).to.be.revertedWith("Ownable: caller is not the owner")
+        // setStabilityPool
+        await expect(
+            qiStablecoin.connect(user1).setStabilityPool('0x639Fe6ab55C921f74e7fac1ee960C0B6293ba612')
+        ).to.be.revertedWith("Ownable: caller is not the owner")
+        // setMinCollateralRatio
+        await expect(
+            qiStablecoin.connect(user1).setMinCollateralRatio(120)
+        ).to.be.revertedWith("Ownable: caller is not the owner")
+        // setMinDebt
+        await expect(
+            qiStablecoin.connect(user1).setMinDebt(80)
+        ).to.be.revertedWith("Ownable: caller is not the owner")
+        // setTokenURI
+        await expect(
+            qiStablecoin.connect(user1).setTokenURI('test')
+        ).to.be.revertedWith("Ownable: caller is not the owner")
+        // setTreasury
+        await expect(
+            qiStablecoin.connect(user1).setTreasury(0)
+        ).to.be.revertedWith("Ownable: caller is not the owner")
+        await expect(
+            qiStablecoin.connect(admin).setTreasury(0)
+        ).to.be.revertedWith("Vault does not exist")
 
     })
 
@@ -109,7 +153,6 @@ describe("CrossChainQiStablecoin", async function () {
         ).to.emit(qiStablecoin, "CreateVault").withArgs(0, user1.address);
         // VaultNFT transferred to user1 after creation of Vault
         expect(await qiStablecoin.balanceOf(user1.address)).to.eq(1)
-
     })
 
     it("test destroyVault", async () => {
@@ -122,14 +165,38 @@ describe("CrossChainQiStablecoin", async function () {
         expect(await qiStablecoin.balanceOf(user1.address)).to.eq(0)
     })
 
-    it("test checkCost,checkExtract: checkLiquidation -> false ", async () => {
+    it("test destroyVault: errors", async () => {
+        await qiStablecoin.connect(user1).createVault()
+
+        // non-vault owner
+        await expect(
+            qiStablecoin.connect(user2).destroyVault(0)
+        ).to.be.revertedWith("Vault is not owned by you")
+
+        // not-valid vaultId
+        await expect(
+            qiStablecoin.connect(user1).destroyVault(1)
+        ).to.be.revertedWith("Vault does not exist")
+
+        // vault with outstanding Debt
+        await wmatic.connect(admin).transfer(user1.address, ethers.utils.parseUnits("20"))
+        await mai.connect(admin).transfer(qiStablecoin.address, ethers.utils.parseUnits("100000"))
+        await wmatic.connect(user1).approve(qiStablecoin.address, ethers.utils.parseUnits("200"))
+        await qiStablecoin.connect(user1).depositCollateral(0, ethers.utils.parseUnits("10"))
+        await qiStablecoin.connect(user1).borrowToken(0, ethers.utils.parseUnits("1"))
+        await expect(
+            qiStablecoin.connect(user1).destroyVault(0)
+        ).to.be.revertedWith("Vault has outstanding debt")
+    })
+
+    it("test checkCost,checkExtract,checkCollateralPercentage: checkLiquidation -> false ", async () => {
         // setup 
         const ethPrice: BigNumber = await qiStablecoin.getEthPriceSource()
         const maiPrice = await qiStablecoin.getTokenPriceSource()
         // funding mai and wmatic to user and qiStableCoin as a pre-requisite
         await wmatic.connect(admin).transfer(user1.address, ethers.utils.parseUnits("20"))
         await mai.connect(admin).transfer(qiStablecoin.address, ethers.utils.parseUnits("100000"))
-        // auser1 approving collateral token for the vault deposit
+        // user1 approving collateral token for the vault deposit
         await wmatic.connect(user1).approve(qiStablecoin.address, ethers.utils.parseUnits("200"))
         // vault deposit
         await qiStablecoin.connect(user1).createVault()
@@ -146,7 +213,13 @@ describe("CrossChainQiStablecoin", async function () {
         expect(await qiStablecoin.checkCollateralPercentage(0)).to.gte(139)
     })
 
-    it("test checkCost,checkExtract: checkLiquidation -> true ", async () => {
+    it("test checkCollateralPercentage, checkLiquidation: error", async () => {
+        await expect(
+            qiStablecoin.checkCollateralPercentage(0)
+        ).to.be.revertedWith("Vault does not exist")
+    })
+
+    it("test checkCost,checkExtract,checkCollateralPercentage: checkLiquidation -> true ", async () => {
         // setup 
         const ethPrice: BigNumber = await qiStablecoin.getEthPriceSource()
         const maiPrice = await qiStablecoin.getTokenPriceSource()
@@ -198,7 +271,6 @@ describe("CrossChainQiStablecoin", async function () {
         console.log("Collateral Percentage:", await qiStablecoin.checkCollateralPercentage(0))
         await qiStablecoin.connect(admin).setMinCollateralRatio(150)
         // liquidation by user2
-
         const liquidationTx = await qiStablecoin.connect(user2).liquidateVault(0)
         liquidationTx.wait()
         // Assertions
@@ -207,14 +279,84 @@ describe("CrossChainQiStablecoin", async function () {
         // After liquidation, Collateral Percentage should increase
         expect(await qiStablecoin.checkCollateralPercentage(0)).to.gte(150)
         expect(await qiStablecoin.maticDebt(user2.address)).to.gt(0)
+        expect(await qiStablecoin.checkLiquidation(0)).to.eq(false)
+    })
+
+    it("test liquidateVault Error: Vault does not exist ", async () => {
+        // vault does not exist
+        await expect(
+            qiStablecoin.connect(user1).liquidateVault(1)
+        ).to.be.revertedWith("Vault does not exist")
+    })
+
+    it("test liquidateVault Error: Vault is not below minimum collateral percentage ", async () => {
+        // setup 
+        const ethPrice: BigNumber = await qiStablecoin.getEthPriceSource()
+        const maiPrice = await qiStablecoin.getTokenPriceSource()
+        // funding mai and wmatic to user and qiStableCoin as a pre-requisite
+        await mai.connect(admin).transfer(qiStablecoin.address, ethers.utils.parseUnits("100000"))
+        await wmatic.connect(admin).transfer(user1.address, ethers.utils.parseUnits("20"))
+        const approveTx = await mai.connect(user2).approve(qiStablecoin.address, ethers.utils.parseUnits("100000"))
+        approveTx.wait()
+
+        // user1 approving collateral token for the vault deposit
+        await wmatic.connect(user1).approve(qiStablecoin.address, ethers.utils.parseUnits("200"))
+        // vault deposit
+        await qiStablecoin.connect(user1).createVault()
+        // collateral deposit
+        await qiStablecoin.connect(user1).depositCollateral(0, ethers.utils.parseUnits("10"))
+        expect(await qiStablecoin.vaultCollateral(0)).to.eq(ethers.utils.parseUnits("10"))
+        // mai borrow 
+        const borrowAmount: number = (10 * Number(ethPrice)) / (Number(maiPrice) * 1.4)
+        const tx = await qiStablecoin.connect(user1).borrowToken(0, ethers.utils.parseUnits(borrowAmount.toString()))
+        // vault is not under minimum collateral percentage to get liquidated
+        await expect(
+            qiStablecoin.connect(user2).liquidateVault(0)
+        ).to.be.revertedWith("Vault is not below minimum collateral percentage")
+    })
+
+    it("test liquidateVault Error: liquidation is disabled for public ", async () => {
+        await qiStablecoin.connect(user1).createVault()
+        // liquidation is not open for public
+        await qiStablecoin.connect(admin).setStabilityPool(user2.address)
+        await expect(
+            qiStablecoin.connect(user1).liquidateVault(0)
+        ).to.be.revertedWith("liquidation is disabled for public")
+    })
+
+
+    it("test liquidationVault Error: Token balance too low to pay off outstanding debt", async () => {
+        // liquidator dont have enough funds to repay the amount for liquidation to happen
+        // setup 
+        const ethPrice: BigNumber = await qiStablecoin.getEthPriceSource()
+        const maiPrice = await qiStablecoin.getTokenPriceSource()
+        // funding mai and wmatic to user and qiStableCoin as a pre-requisite
+        await mai.connect(admin).transfer(qiStablecoin.address, ethers.utils.parseUnits("100000"))
+        await wmatic.connect(admin).transfer(user1.address, ethers.utils.parseUnits("20"))
+        const approveTx = await mai.connect(user2).approve(qiStablecoin.address, ethers.utils.parseUnits("100000"))
+        approveTx.wait()
+
+        // user1 approving collateral token for the vault deposit
+        await wmatic.connect(user1).approve(qiStablecoin.address, ethers.utils.parseUnits("200"))
+        // vault deposit
+        await qiStablecoin.connect(user1).createVault()
+        // collateral deposit
+        await qiStablecoin.connect(user1).depositCollateral(0, ethers.utils.parseUnits("10"))
+        expect(await qiStablecoin.vaultCollateral(0)).to.eq(ethers.utils.parseUnits("10"))
+        // mai borrow 
+        const borrowAmount: number = (10 * Number(ethPrice)) / (Number(maiPrice) * 1.4)
+        const tx = await qiStablecoin.connect(user1).borrowToken(0, ethers.utils.parseUnits(borrowAmount.toString()))
+        tx.wait()
+        // modifying _minCollateralPercentage to artificially liquidate an account
+        console.log("Collateral Percentage:", await qiStablecoin.checkCollateralPercentage(0))
+        await qiStablecoin.connect(admin).setMinCollateralRatio(150)
+        // liquidation by user2
+        await expect(
+            qiStablecoin.connect(user2).liquidateVault(0)
+        ).to.be.revertedWith("Token balance too low to pay off outstanding debt")
     })
 
     it("test getPaid ", async () => {
-        // before Liquidation:
-        await expect(
-            qiStablecoin.connect(user2).getPaid()
-        ).to.be.revertedWith("Don't have anything for you.")
-        // After Liquidation
         // setup 
         const ethPrice: BigNumber = await qiStablecoin.getEthPriceSource()
         const maiPrice = await qiStablecoin.getTokenPriceSource()
@@ -249,6 +391,13 @@ describe("CrossChainQiStablecoin", async function () {
         expect(await wmatic.balanceOf(user2.address)).to.eq(maticReward)
         // After liquidation, Collateral Percentage should increase
         expect(await qiStablecoin.maticDebt(user2.address)).to.eq(0)
+    })
+
+    it("test getPaid Error: User does not have anything to be paid ", async () => {
+        // before Liquidation:
+        await expect(
+            qiStablecoin.connect(user2).getPaid()
+        ).to.be.revertedWith("Don't have anything for you.")
     })
 
 });
