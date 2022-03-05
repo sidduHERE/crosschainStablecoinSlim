@@ -1,21 +1,20 @@
 // contracts/MyVaultNFT.sol
 // SPDX-License-Identifier: MIT
-pragma solidity 0.5.17;
+pragma solidity 0.8.11;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721Full.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
-contract VaultNFTv4 is ERC721Full {
+contract VaultNFTv4 is ERC721 {
 
     string public uri;
 
     constructor(string memory name, string memory symbol, string memory _uri)
-        public
-        ERC721Full(name, symbol)
+        ERC721(name, symbol)
     {
         uri = _uri;
     }
 
-    function tokenURI(uint256 tokenId) public view returns (string memory) {
+    function tokenURI(uint256 tokenId) public override view returns (string memory) {
         require(_exists(tokenId));
 
         return uri;

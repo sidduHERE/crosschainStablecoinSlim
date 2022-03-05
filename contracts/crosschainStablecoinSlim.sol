@@ -1,10 +1,9 @@
-pragma solidity 0.5.17;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.11;
 
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20Detailed.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 import "./IPriceSourceAll.sol";
 
@@ -14,9 +13,7 @@ import "hardhat/console.sol";
 
 contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
     IPriceSource public ethPriceSource;
-
-    using SafeMath for uint256;
-    using SafeERC20 for ERC20Detailed;
+    using SafeERC20 for ERC20;
 
     uint256 public _minimumCollateralPercentage;
 
@@ -36,8 +33,8 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
 
     address public stabilityPool;
 
-    ERC20Detailed public collateral;
-    ERC20Detailed public mai;
+    ERC20 public collateral;
+    ERC20 public mai;
 
     uint256 public priceSourceDecimals;
     uint256 public totalBorrowed;
@@ -70,7 +67,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
         address _mai,
         address _collateral,
         string memory baseURI
-    ) public VaultNFTv4(name, symbol, baseURI) {
+    ) VaultNFTv4(name, symbol, baseURI) {
         assert(ethPriceSourceAddress != address(0));
         assert(minimumCollateralPercentage != 0);
 
@@ -85,8 +82,8 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
 
         _minimumCollateralPercentage = minimumCollateralPercentage;
 
-        collateral = ERC20Detailed(_collateral);
-        mai = ERC20Detailed(_mai);
+        collateral = ERC20(_collateral);
+        mai = ERC20(_mai);
         priceSourceDecimals = 8;
     }
 
@@ -132,24 +129,24 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
         assert(getEthPriceSource() != 0);
         assert(getTokenPriceSource() != 0);
 
-        uint256 collateralValue = _collateral.mul(getEthPriceSource()).mul(
-            10**(uint256(mai.decimals()).sub(uint256(collateral.decimals())))
+        uint256 collateralValue = _collateral * getEthPriceSource() * (
+            10**(uint256(mai.decimals()) - (uint256(collateral.decimals())))
         );
         
         assert(collateralValue >= _collateral);
 
-        uint256 debtValue = _debt.mul(getTokenPriceSource());
+        uint256 debtValue = _debt * getTokenPriceSource();
 
         assert(debtValue >= _debt);
 
-        uint256 collateralValueTimes100 = collateralValue.mul(100);
+        uint256 collateralValueTimes100 = collateralValue * 100;
         
         assert(collateralValueTimes100 > collateralValue);
 
         return (collateralValueTimes100, debtValue);
     }
 
-    function isValidCollateral(uint256 collateral, uint256 debt)
+    function isValidCollateral(uint256 _collateral, uint256 debt)
         public
         view
         returns (bool)
@@ -157,16 +154,16 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
         (
             uint256 collateralValueTimes100,
             uint256 debtValue
-        ) = calculateCollateralProperties(collateral, debt);
+        ) = calculateCollateralProperties(_collateral, debt);
 
-        uint256 collateralPercentage = collateralValueTimes100.div(debtValue);
+        uint256 collateralPercentage = collateralValueTimes100 / debtValue;
 
         return collateralPercentage >= _minimumCollateralPercentage;
     }
 
     function createVault() external returns (uint256) {
         uint256 id = vaultCount;
-        vaultCount = vaultCount.add(1);
+        vaultCount = vaultCount + 1;
 
         assert(vaultCount >= id);
 
@@ -200,7 +197,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
     function depositCollateral(uint256 vaultID, uint256 amount) external vaultExists(vaultID) {
         collateral.safeTransferFrom(msg.sender, address(this), amount);
 
-        uint256 newCollateral = vaultCollateral[vaultID].add(amount);
+        uint256 newCollateral = vaultCollateral[vaultID] + (amount);
 
         assert(newCollateral >= vaultCollateral[vaultID]);
 
@@ -219,7 +216,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
             "Vault does not have enough collateral"
         );
 
-        uint256 newCollateral = vaultCollateral[vaultID].sub(amount);
+        uint256 newCollateral = vaultCollateral[vaultID] - amount;
 
         if (vaultDebt[vaultID] != 0) {
             require(
@@ -244,7 +241,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
             "borrowToken: Cannot mint over available supply."
         );
 
-        uint256 newDebt = vaultDebt[vaultID].add(amount);
+        uint256 newDebt = vaultDebt[vaultID] + amount;
 
         assert(newDebt > vaultDebt[vaultID]);
 
@@ -254,7 +251,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
         );
 
         require(
-            (vaultDebt[vaultID]).add(amount) >= minDebt, 
+            ((vaultDebt[vaultID]) + amount ) >= minDebt, 
             "Vault debt can't be under minDebt"
         );
 
@@ -262,7 +259,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
 
         // mai
         mai.safeTransfer(msg.sender, amount);
-        totalBorrowed = totalBorrowed.add(amount);
+        totalBorrowed = totalBorrowed + (amount);
         emit BorrowToken(vaultID, amount);
     }
 
@@ -275,24 +272,24 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
         );
 
         require(
-            (vaultDebt[vaultID]).sub(amount) >= minDebt
+            ((vaultDebt[vaultID]) - amount ) >= minDebt
                    ||
             amount == (vaultDebt[vaultID]), 
             "Vault debt can't be under minDebt"
         );
 
         uint256 _closingFee = (
-            amount.mul(closingFee).mul(getTokenPriceSource())
-        ).div(getEthPriceSource().mul(10000));
+            amount * closingFee * getTokenPriceSource()
+        ) / (getEthPriceSource() * 10000);
 
         //mai
         mai.safeTransferFrom(msg.sender, address(this), amount);
 
-        vaultDebt[vaultID] = vaultDebt[vaultID].sub(amount);
-        vaultCollateral[vaultID] = vaultCollateral[vaultID].sub(_closingFee);
-        vaultCollateral[treasury] = vaultCollateral[treasury].add(_closingFee);
+        vaultDebt[vaultID] = vaultDebt[vaultID] - amount;
+        vaultCollateral[vaultID] = vaultCollateral[vaultID] - _closingFee;
+        vaultCollateral[treasury] = vaultCollateral[treasury] + _closingFee;
 
-        totalBorrowed = totalBorrowed.sub(amount);
+        totalBorrowed = totalBorrowed - amount;
         emit PayBackToken(vaultID, amount, _closingFee);
 
     }
@@ -325,11 +322,12 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
             return 0;
         }
 
-        uint256 collateralPercentage = collateralValueTimes100.div(debtValue);
+        // As its not used, Do we plan on using it or should i remove it? 
+        uint256 collateralPercentage = collateralValueTimes100 / debtValue;
 
-        debtValue = debtValue.div(10**priceSourceDecimals);
+        debtValue = debtValue / (10**priceSourceDecimals);
 
-        uint256 halfDebt = debtValue.div(debtRatio); //debtRatio (2)
+        uint256 halfDebt = debtValue / debtRatio; //debtRatio (2)
 
         if(halfDebt<=minDebt) {
             halfDebt=debtValue;
@@ -343,25 +341,23 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
             return 0;
         }
 
-        (
-            uint256 collateralValueTimes100,
-            uint256 debtValue
+        (,uint256 debtValue
         ) = calculateCollateralProperties(
                 vaultCollateral[vaultID],
                 vaultDebt[vaultID]
             );
 
-        uint256 halfDebt = debtValue.div(debtRatio); //debtRatio (2)
+        uint256 halfDebt = debtValue / debtRatio; //debtRatio (2)
 
         if (halfDebt == 0) {
             return 0;
         }
 
-        if((halfDebt).div(10**priceSourceDecimals)<=minDebt){
+        if((halfDebt) / (10**priceSourceDecimals)<=minDebt){
             // full liquidation if under the min debt.
-            return debtValue.mul(gainRatio).div(1000).div(getEthPriceSource());
+            return debtValue * (gainRatio) / (1000) / (getEthPriceSource());
         }else{
-            return halfDebt.mul(gainRatio).div(1000).div(getEthPriceSource());
+            return halfDebt * (gainRatio) / 1000 / (getEthPriceSource());
         }
     }
 
@@ -383,7 +379,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
                 vaultDebt[vaultID]
             );
 
-        return collateralValueTimes100.div(debtValue);
+        return collateralValueTimes100 / (debtValue);
     }
 
     function checkLiquidation(uint256 vaultID) public view vaultExists(vaultID) returns (bool) {
@@ -400,7 +396,7 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
                 vaultDebt[vaultID]
             );
 
-        uint256 collateralPercentage = collateralValueTimes100.div(debtValue);
+        uint256 collateralPercentage = collateralValueTimes100 / (debtValue);
 
         if (collateralPercentage < _minimumCollateralPercentage) {
             return true;
@@ -423,16 +419,16 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
                 vaultDebt[vaultID]
             );
 
-        uint256 collateralPercentage = collateralValueTimes100.div(debtValue);
+        uint256 collateralPercentage = collateralValueTimes100 / (debtValue);
 
         require(
             collateralPercentage < _minimumCollateralPercentage,
             "Vault is not below minimum collateral percentage"
         );
 
-        debtValue = debtValue.div(10**priceSourceDecimals);
+        debtValue = debtValue / (10**priceSourceDecimals);
 
-        uint256 halfDebt = debtValue.div(debtRatio); //debtRatio (2)
+        uint256 halfDebt = debtValue / (debtRatio); //debtRatio (2)
 
         if(halfDebt<=minDebt){
             halfDebt=debtValue;
@@ -445,24 +441,24 @@ contract crosschainStablecoinSlim is ReentrancyGuard, VaultNFTv4 {
 
         //mai
         mai.safeTransferFrom(msg.sender, address(this), halfDebt);
-        totalBorrowed = totalBorrowed.sub(halfDebt);
+        totalBorrowed = totalBorrowed - (halfDebt);
 
         uint256 maticExtract = checkExtract(vaultID);
 
-        vaultDebt[vaultID] = vaultDebt[vaultID].sub(halfDebt); // we paid back half of its debt.
+        vaultDebt[vaultID] = vaultDebt[vaultID] - (halfDebt); // we paid back half of its debt.
 
         uint256 _closingFee = (
-            halfDebt.mul(closingFee).mul(getTokenPriceSource())
-        ).div(getEthPriceSource().mul(10000));
+            halfDebt * (closingFee) * (getTokenPriceSource())
+        ) / (getEthPriceSource() * (10000));
 
-        vaultCollateral[vaultID] = vaultCollateral[vaultID].sub(_closingFee);
-        vaultCollateral[treasury] = vaultCollateral[treasury].add(_closingFee);
+        vaultCollateral[vaultID] = vaultCollateral[vaultID] - (_closingFee);
+        vaultCollateral[treasury] = vaultCollateral[treasury] - (_closingFee);
 
         // deduct the amount from the vault's collateral
-        vaultCollateral[vaultID] = vaultCollateral[vaultID].sub(maticExtract);
+        vaultCollateral[vaultID] = vaultCollateral[vaultID] - (maticExtract);
 
         // let liquidator take the collateral
-        maticDebt[msg.sender] = maticDebt[msg.sender].add(maticExtract);
+        maticDebt[msg.sender] = maticDebt[msg.sender] + (maticExtract);
 
         emit LiquidateVault(
             vaultID,

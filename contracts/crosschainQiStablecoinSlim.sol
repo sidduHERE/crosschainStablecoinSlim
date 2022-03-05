@@ -1,6 +1,7 @@
-pragma solidity 0.5.17;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.11;
 
-import "@openzeppelin/contracts/ownership/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "./crosschainStablecoinSlim.sol";
 
 contract crosschainQiStablecoinSlim is crosschainStablecoinSlim, Ownable {
@@ -13,7 +14,6 @@ contract crosschainQiStablecoinSlim is crosschainStablecoinSlim, Ownable {
         address _collateral,
         string memory baseURI
     )
-        public
         crosschainStablecoinSlim(
             ethPriceSourceAddress,
             minimumCollateralPercentage,
